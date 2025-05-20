@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FamilyReminder",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier for the reminder"
+    },
+    "title": {
+      "type": "string",
+      "description": "Title of the reminder"
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed description of the reminder"
+    },
+    "dueDate": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Due date and time for the reminder"
+    },
+    "completed": {
+      "type": "boolean",
+      "description": "Status of the reminder, whether it is completed or not"
+    },
+    "familyId": {
+      "type": "string",
+      "description": "Identifier for the family associated with the reminder"
+    }
+  },
+  "required": ["id", "title", "dueDate", "familyId"]
+}
