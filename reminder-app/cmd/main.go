@@ -3,10 +3,17 @@ package main
 import (
 	"log"
 	"net/http"
+	"sync"
 
 	"reminder-app/internal/handlers"
 
 	"github.com/gorilla/mux"
+)
+
+var (
+	mu                sync.Mutex
+	familyIDCounter   int
+	reminderIDCounter int
 )
 
 func main() {
