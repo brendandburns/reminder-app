@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -90,11 +91,12 @@ func DeleteFamilyHandler(w http.ResponseWriter, r *http.Request) {
 // Reminder Handlers
 func CreateReminderHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Title        string `json:"title"`
-		Description  string `json:"description"`
-		DueDate      string `json:"due_date"`
-		FamilyID     string `json:"family_id"`
-		FamilyMember string `json:"family_member"`
+		Title        string              `json:"title"`
+		Description  string              `json:"description"`
+		DueDate      string              `json:"due_date"`
+		FamilyID     string              `json:"family_id"`
+		FamilyMember string              `json:"family_member"`
+		Recurrence   rem.RecurrencePattern `json:"recurrence"`
 	}
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -144,9 +146,51 @@ func CreateReminderHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("%s %s %s %d - Bad Request: family member not found: %s", r.Method, r.URL.Path, r.UserAgent(), http.StatusBadRequest, req.FamilyMember)
 		return
 	}
+	if req.Recurrence.Type == "" {
+		req.Recurrence.Type = "once"
+	}
+
+	// Validate recurrence pattern
+	switch req.Recurrence.Type {
+	case "once":
+		// No additional validation needed
+	case "weekly":
+		if len(req.Recurrence.Days) == 0 {
+			Mu.Unlock()
+			http.Error(w, "weekly recurrence requires at least one day", http.StatusBadRequest)
+			return
+		}
+		for _, day := range req.Recurrence.Days {
+			if !isValidWeekday(day) {
+				Mu.Unlock()
+				http.Error(w, "invalid weekday in recurrence pattern", http.StatusBadRequest)
+				return
+			}
+		}
+	case "monthly":
+		if req.Recurrence.Date < 1 || req.Recurrence.Date > 31 {
+			Mu.Unlock()
+			http.Error(w, "monthly recurrence requires a date between 1 and 31", http.StatusBadRequest)
+			return
+		}
+	default:
+		Mu.Unlock()
+		http.Error(w, "invalid recurrence type", http.StatusBadRequest)
+		return
+	}
+
+	if req.Recurrence.EndDate != "" {
+		_, err = time.Parse(time.RFC3339, req.Recurrence.EndDate)
+		if err != nil {
+			Mu.Unlock()
+			http.Error(w, "invalid end_date format", http.StatusBadRequest)
+			return
+		}
+	}
+
 	reminderIDCounter++
 	id := "rem" + itoa(reminderIDCounter)
-	reminder := rem.NewReminder(id, req.Title, req.Description, due, req.FamilyID, req.FamilyMember)
+	reminder := rem.NewReminder(id, req.Title, req.Description, due, req.FamilyID, req.FamilyMember, req.Recurrence)
 	Reminders[reminder.ID] = reminder
 	Mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
@@ -199,4 +243,16 @@ func DeleteReminderHandler(w http.ResponseWriter, r *http.Request) {
 // Helper function for int to string
 func itoa(i int) string {
 	return fmt.Sprintf("%d", i)
+}
+
+// Helper function to validate weekday strings
+func isValidWeekday(day string) bool {
+	validDays := []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
+	day = strings.ToLower(day)
+	for _, valid := range validDays {
+		if day == valid {
+			return true
+		}
+	}
+	return false
 }
