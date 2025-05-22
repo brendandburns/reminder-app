@@ -6,21 +6,22 @@ import (
 )
 
 type RecurrencePattern struct {
-	Type     string   `json:"type"`      // "once", "weekly", "monthly"
-	Days     []string `json:"days"`      // ["monday", "wednesday", etc] for weekly
-	Date     int      `json:"date"`      // 1-31 for monthly
-	EndDate  string   `json:"end_date"`  // Optional end date for recurrence
+	Type    string   `json:"type"`     // "once", "weekly", "monthly"
+	Days    []string `json:"days"`     // ["monday", "wednesday", etc] for weekly
+	Date    int      `json:"date"`     // 1-31 for monthly
+	EndDate string   `json:"end_date"` // Optional end date for recurrence
 }
 
 type Reminder struct {
-	ID           string           `json:"id"`
-	Title        string           `json:"title"`
-	Description  string           `json:"description"`
-	DueDate      time.Time        `json:"due_date"`
+	ID           string            `json:"id"`
+	Title        string            `json:"title"`
+	Description  string            `json:"description"`
+	DueDate      time.Time         `json:"due_date"`
 	Recurrence   RecurrencePattern `json:"recurrence"`
-	Completed    bool             `json:"completed"`
-	FamilyID     string           `json:"family_id"`
-	FamilyMember string           `json:"family_member"`
+	Completed    bool              `json:"completed"`
+	CompletedAt  *time.Time        `json:"completed_at,omitempty"`
+	FamilyID     string            `json:"family_id"`
+	FamilyMember string            `json:"family_member"`
 }
 
 func NewReminder(id, title, description string, dueDate time.Time, familyID, familyMember string, recurrence RecurrencePattern) *Reminder {
@@ -31,6 +32,7 @@ func NewReminder(id, title, description string, dueDate time.Time, familyID, fam
 		DueDate:      dueDate,
 		Recurrence:   recurrence,
 		Completed:    false,
+		CompletedAt:  nil,
 		FamilyID:     familyID,
 		FamilyMember: familyMember,
 	}
@@ -97,7 +99,9 @@ func (r *Reminder) Update(title, description string, dueDate time.Time) {
 }
 
 func (r *Reminder) MarkCompleted() {
+	now := time.Now()
 	r.Completed = true
+	r.CompletedAt = &now
 }
 
 func (r *Reminder) Delete() {

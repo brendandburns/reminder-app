@@ -153,36 +153,99 @@ $(document).ready(function () {
     }
   });
 
-  // Add reminder
-  $('#add-reminder-form').on('submit', function (this: HTMLFormElement, e: Event) {
-    e.preventDefault();
-    const title = $('#reminder-title').val() as string;
-    const description = $('#reminder-description').val() as string;
-    const localDate = new Date($('#reminder-due-date').val() as string);
-    const due_date = localDate.toISOString(); // Converts to ISO 8601 UTC format
-    const family_id = $('#reminder-family').val() as string;
-    const family_member = $('#reminder-family-member').val() as string;
+  // Populate monthly date options
+  const monthlyDate = document.getElementById('monthly-date') as HTMLSelectElement;
+  for (let i = 1; i <= 31; i++) {
+    const option = document.createElement('option');
+    option.value = i.toString();
+    option.textContent = i.toString();
+    monthlyDate.appendChild(option);
+  }
 
-    $.ajax({
-      url: '/reminders',
-      method: 'POST',
-      contentType: 'application/json',
-      data: JSON.stringify({ 
-        title, 
-        description, 
-        due_date,
-        family_id,
-        family_member
-      }),
-      success: function() {
-        $('#add-reminder-form')[0].reset();
-        loadReminders();
-        showDialog('Reminder added successfully!');
-      },
-      error: function(jqXHR: JQueryXHR, textStatus: string, errorThrown: string) {
-        showDialog(`Error adding reminder: ${textStatus}`);
+  // Handle recurrence type changes
+  const recurrenceType = document.getElementById('reminder-recurrence-type') as HTMLSelectElement;
+  const weeklyOptions = document.getElementById('weekly-options') as HTMLDivElement;
+  const monthlyOptions = document.getElementById('monthly-options') as HTMLDivElement;
+  const endDateContainer = document.getElementById('end-date-container') as HTMLDivElement;
+
+  recurrenceType.addEventListener('change', () => {
+    weeklyOptions.style.display = 'none';
+    monthlyOptions.style.display = 'none';
+    endDateContainer.style.display = 'none';
+
+    switch (recurrenceType.value) {
+      case 'weekly':
+        weeklyOptions.style.display = 'block';
+        endDateContainer.style.display = 'block';
+        break;
+      case 'monthly':
+        monthlyOptions.style.display = 'block';
+        endDateContainer.style.display = 'block';
+        break;
+    }
+  });
+
+  // Update form submission to include recurrence data
+  const addReminderForm = document.getElementById('add-reminder-form') as HTMLFormElement;
+  addReminderForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const title = (document.getElementById('reminder-title') as HTMLInputElement).value;
+    const description = (document.getElementById('reminder-description') as HTMLInputElement).value;
+    const familyId = (document.getElementById('reminder-family') as HTMLSelectElement).value;
+    const familyMember = (document.getElementById('reminder-family-member') as HTMLSelectElement).value;
+    const dueDate = (document.getElementById('reminder-due-date') as HTMLInputElement).value;
+    const endDate = (document.getElementById('reminder-end-date') as HTMLInputElement).value;
+
+    const recurrence: any = {
+      type: recurrenceType.value
+    };
+
+    if (recurrence.type === 'weekly') {
+      const selectedDays = Array.from(document.querySelectorAll('.weekday:checked'))
+        .map(cb => (cb as HTMLInputElement).value);
+      if (selectedDays.length === 0) {
+        alert('Please select at least one day for weekly recurrence');
+        return;
       }
-    });
+      recurrence.days = selectedDays;
+    } else if (recurrence.type === 'monthly') {
+      recurrence.date = parseInt(monthlyDate.value);
+    }
+
+    if (endDate && (recurrence.type === 'weekly' || recurrence.type === 'monthly')) {
+      recurrence.end_date = new Date(endDate).toISOString();
+    }
+
+    const reminderData = {
+      title,
+      description,
+      due_date: new Date(dueDate).toISOString(),
+      family_id: familyId,
+      family_member: familyMember,
+      recurrence
+    };
+
+    try {
+      const response = await fetch('/reminders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(reminderData),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create reminder');
+      }
+
+      // Reset form and refresh reminder list
+      addReminderForm.reset();
+      loadReminders();
+    } catch (error) {
+      console.error('Error creating reminder:', error);
+      alert('Failed to create reminder');
+    }
   });
 
   // Modern Bootstrap dialog

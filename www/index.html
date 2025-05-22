@@ -33,6 +33,19 @@
   <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
     <div class="container-fluid">
       <span class="navbar-brand mb-0 h1">Family Reminder App</span>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav">
+          <li class="nav-item">
+            <a class="nav-link active" href="index.html">Home</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="member.html">Member View</a>
+          </li>
+        </ul>
+      </div>
     </div>
   </nav>
   <main class="container">
@@ -76,8 +89,48 @@
             </select>
           </div>
           <div class="mb-3">
+            <label for="reminder-recurrence-type" class="form-label">Recurrence</label>
+            <select class="form-select" id="reminder-recurrence-type">
+              <option value="once">Once</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+          </div>
+          <!-- Weekly recurrence options -->
+          <div class="mb-3" id="weekly-options" style="display: none;">
+            <label class="form-label">Repeat on</label>
+            <div class="btn-group" role="group">
+              <input type="checkbox" class="btn-check weekday" id="monday" value="monday">
+              <label class="btn btn-outline-primary" for="monday">Mon</label>
+              <input type="checkbox" class="btn-check weekday" id="tuesday" value="tuesday">
+              <label class="btn btn-outline-primary" for="tuesday">Tue</label>
+              <input type="checkbox" class="btn-check weekday" id="wednesday" value="wednesday">
+              <label class="btn btn-outline-primary" for="wednesday">Wed</label>
+              <input type="checkbox" class="btn-check weekday" id="thursday" value="thursday">
+              <label class="btn btn-outline-primary" for="thursday">Thu</label>
+              <input type="checkbox" class="btn-check weekday" id="friday" value="friday">
+              <label class="btn btn-outline-primary" for="friday">Fri</label>
+              <input type="checkbox" class="btn-check weekday" id="saturday" value="saturday">
+              <label class="btn btn-outline-primary" for="saturday">Sat</label>
+              <input type="checkbox" class="btn-check weekday" id="sunday" value="sunday">
+              <label class="btn btn-outline-primary" for="sunday">Sun</label>
+            </div>
+          </div>
+          <!-- Monthly recurrence options -->
+          <div class="mb-3" id="monthly-options" style="display: none;">
+            <label for="monthly-date" class="form-label">Day of month</label>
+            <select class="form-select" id="monthly-date">
+              <!-- Options 1-31 will be populated by JavaScript -->
+            </select>
+          </div>
+          <!-- End date for recurring reminders -->
+          <div class="mb-3" id="end-date-container" style="display: none;">
+            <label for="reminder-end-date" class="form-label">End Date (optional)</label>
+            <input class="form-control" id="reminder-end-date" type="datetime-local">
+          </div>
+          <div class="mb-3">
             <label for="reminder-due-date" class="form-label">Due Date</label>
-            <input class="form-control" id="reminder-due-date" type="datetime-local" placeholder="Due Date" required>
+            <input class="form-control" id="reminder-due-date" type="datetime-local" required>
           </div>
           <button class="btn btn-primary" type="submit">Add Reminder</button>
         </form>

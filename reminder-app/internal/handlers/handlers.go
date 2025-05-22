@@ -13,13 +13,14 @@ import (
 
 	fam "reminder-app/internal/family"
 	rem "reminder-app/internal/reminder"
+	"reminder-app/internal/storage"
 
 	"github.com/gorilla/mux"
 )
 
 var (
-	Families          = make(map[string]*fam.Family)
-	Reminders         = make(map[string]*rem.Reminder)
+	// Remove old maps, use storage instead
+	Store             storage.Storage
 	Mu                sync.Mutex
 	familyIDCounter   int
 	reminderIDCounter int
@@ -44,8 +45,12 @@ func CreateFamilyHandler(w http.ResponseWriter, r *http.Request) {
 	Mu.Lock()
 	familyIDCounter++
 	f.ID = "fam" + itoa(familyIDCounter)
-	Families[f.ID] = &f
+	err = Store.CreateFamily(&f)
 	Mu.Unlock()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(f)
@@ -55,9 +60,9 @@ func CreateFamilyHandler(w http.ResponseWriter, r *http.Request) {
 func GetFamilyHandler(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
 	Mu.Lock()
-	f, ok := Families[id]
+	f, err := Store.GetFamily(id)
 	Mu.Unlock()
-	if !ok {
+	if err != nil {
 		http.NotFound(w, r)
 		log.Printf("%s %s %s %d", r.Method, r.URL.Path, r.UserAgent(), http.StatusNotFound)
 		return
@@ -69,10 +74,11 @@ func GetFamilyHandler(w http.ResponseWriter, r *http.Request) {
 
 func ListFamiliesHandler(w http.ResponseWriter, r *http.Request) {
 	Mu.Lock()
-	defer Mu.Unlock()
-	var list []*fam.Family
-	for _, f := range Families {
-		list = append(list, f)
+	list, err := Store.ListFamilies()
+	Mu.Unlock()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(list)
@@ -82,8 +88,12 @@ func ListFamiliesHandler(w http.ResponseWriter, r *http.Request) {
 func DeleteFamilyHandler(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
 	Mu.Lock()
-	delete(Families, id)
+	err := Store.DeleteFamily(id)
 	Mu.Unlock()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 	log.Printf("%s %s %s %d", r.Method, r.URL.Path, r.UserAgent(), http.StatusNoContent)
 }
@@ -91,11 +101,11 @@ func DeleteFamilyHandler(w http.ResponseWriter, r *http.Request) {
 // Reminder Handlers
 func CreateReminderHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Title        string              `json:"title"`
-		Description  string              `json:"description"`
-		DueDate      string              `json:"due_date"`
-		FamilyID     string              `json:"family_id"`
-		FamilyMember string              `json:"family_member"`
+		Title        string                `json:"title"`
+		Description  string                `json:"description"`
+		DueDate      string                `json:"due_date"`
+		FamilyID     string                `json:"family_id"`
+		FamilyMember string                `json:"family_member"`
 		Recurrence   rem.RecurrencePattern `json:"recurrence"`
 	}
 	body, err := io.ReadAll(r.Body)
@@ -125,8 +135,8 @@ func CreateReminderHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	Mu.Lock()
-	family, ok := Families[req.FamilyID]
-	if !ok {
+	family, err := Store.GetFamily(req.FamilyID)
+	if err != nil {
 		Mu.Unlock()
 		http.Error(w, "family not found", http.StatusBadRequest)
 		log.Printf("%s %s %s %d - Bad Request: family not found: %s", r.Method, r.URL.Path, r.UserAgent(), http.StatusBadRequest, req.FamilyID)
@@ -191,8 +201,12 @@ func CreateReminderHandler(w http.ResponseWriter, r *http.Request) {
 	reminderIDCounter++
 	id := "rem" + itoa(reminderIDCounter)
 	reminder := rem.NewReminder(id, req.Title, req.Description, due, req.FamilyID, req.FamilyMember, req.Recurrence)
-	Reminders[reminder.ID] = reminder
+	err = Store.CreateReminder(reminder)
 	Mu.Unlock()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(reminder)
@@ -202,9 +216,9 @@ func CreateReminderHandler(w http.ResponseWriter, r *http.Request) {
 func GetReminderHandler(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
 	Mu.Lock()
-	reminder, ok := Reminders[id]
+	reminder, err := Store.GetReminder(id)
 	Mu.Unlock()
-	if !ok {
+	if err != nil {
 		http.NotFound(w, r)
 		log.Printf("%s %s %s %d - Not Found: reminder id '%s' does not exist", r.Method, r.URL.Path, r.UserAgent(), http.StatusNotFound, id)
 		return
@@ -216,10 +230,11 @@ func GetReminderHandler(w http.ResponseWriter, r *http.Request) {
 
 func ListRemindersHandler(w http.ResponseWriter, r *http.Request) {
 	Mu.Lock()
-	defer Mu.Unlock()
-	var list []*rem.Reminder
-	for _, r := range Reminders {
-		list = append(list, r)
+	list, err := Store.ListReminders()
+	Mu.Unlock()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(list)
@@ -229,15 +244,183 @@ func ListRemindersHandler(w http.ResponseWriter, r *http.Request) {
 func DeleteReminderHandler(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
 	Mu.Lock()
-	_, existed := Reminders[id]
-	delete(Reminders, id)
+	err := Store.DeleteReminder(id)
 	Mu.Unlock()
-	w.WriteHeader(http.StatusNoContent)
-	if existed {
-		log.Printf("%s %s %s %d", r.Method, r.URL.Path, r.UserAgent(), http.StatusNoContent)
-	} else {
-		log.Printf("%s %s %s %d - Not Found: reminder id '%s' does not exist (delete)", r.Method, r.URL.Path, r.UserAgent(), http.StatusNoContent, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
+	w.WriteHeader(http.StatusNoContent)
+	log.Printf("%s %s %s %d", r.Method, r.URL.Path, r.UserAgent(), http.StatusNoContent)
+}
+
+func UpdateReminderHandler(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
+	Mu.Lock()
+	reminder, err := Store.GetReminder(id)
+	if err != nil {
+		Mu.Unlock()
+		http.NotFound(w, r)
+		log.Printf("%s %s %s %d - Not Found: reminder id '%s' does not exist (update)", r.Method, r.URL.Path, r.UserAgent(), http.StatusNotFound, id)
+		return
+	}
+	// Read and decode partial update
+	var patch map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+		Mu.Unlock()
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	updated := false
+	for k, v := range patch {
+		switch k {
+		case "title":
+			if s, ok := v.(string); ok {
+				reminder.Title = s
+				updated = true
+			}
+		case "description":
+			if s, ok := v.(string); ok {
+				reminder.Description = s
+				updated = true
+			}
+		case "due_date":
+			if s, ok := v.(string); ok {
+				if t, err := time.Parse(time.RFC3339, s); err == nil {
+					reminder.DueDate = t
+					updated = true
+				}
+			}
+		case "completed":
+			if b, ok := v.(bool); ok {
+				if reminder.IsRecurring() {
+					// For recurring reminders, never set Completed=true, just set CompletedAt
+					if b {
+						now := time.Now()
+						reminder.CompletedAt = &now
+					} else {
+						reminder.CompletedAt = nil
+					}
+					reminder.Completed = false
+					updated = true
+				} else {
+					if b && !reminder.Completed {
+						reminder.MarkCompleted()
+						updated = true
+					} else if !b && reminder.Completed {
+						reminder.Completed = false
+						reminder.CompletedAt = nil
+						updated = true
+					}
+				}
+			}
+		case "recurrence":
+			if rec, ok := v.(map[string]interface{}); ok {
+				var rp rem.RecurrencePattern
+				b, _ := json.Marshal(rec)
+				if err := json.Unmarshal(b, &rp); err == nil {
+					reminder.Recurrence = rp
+					updated = true
+				}
+			}
+		case "family_member":
+			if s, ok := v.(string); ok {
+				reminder.FamilyMember = s
+				updated = true
+			}
+		}
+	}
+	if updated {
+		err = Store.CreateReminder(reminder) // Overwrite existing
+	}
+	Mu.Unlock()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(reminder)
+	log.Printf("%s %s %s %d - PATCH reminder %s", r.Method, r.URL.Path, r.UserAgent(), http.StatusOK, id)
+}
+
+// --- CompletionEvent Handlers ---
+func CreateCompletionEventHandler(w http.ResponseWriter, r *http.Request) {
+	var e rem.CompletionEvent
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "failed to read request body", http.StatusBadRequest)
+		return
+	}
+	r.Body = io.NopCloser(bytes.NewBuffer(body))
+	if err := json.NewDecoder(r.Body).Decode(&e); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if e.ID == "" {
+		Mu.Lock()
+		e.ID = "cev" + itoa(reminderIDCounter+1) // Use reminderIDCounter for unique IDs
+		reminderIDCounter++
+		Mu.Unlock()
+	}
+	if e.ReminderID == "" || e.CompletedBy == "" {
+		http.Error(w, "reminder_id and completed_by are required", http.StatusBadRequest)
+		return
+	}
+	if e.CompletedAt.IsZero() {
+		e.CompletedAt = time.Now()
+	}
+	Mu.Lock()
+	err = Store.CreateCompletionEvent(&e)
+	Mu.Unlock()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(e)
+}
+
+func GetCompletionEventHandler(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
+	Mu.Lock()
+	e, err := Store.GetCompletionEvent(id)
+	Mu.Unlock()
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(e)
+}
+
+func ListCompletionEventsHandler(w http.ResponseWriter, r *http.Request) {
+	reminderID := mux.Vars(r)["id"]
+	if reminderID == "" {
+		http.Error(w, "reminder_id query param required", http.StatusBadRequest)
+		return
+	}
+	Mu.Lock()
+	list, err := Store.ListCompletionEvents(reminderID)
+	Mu.Unlock()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(list)
+}
+
+func DeleteCompletionEventHandler(w http.ResponseWriter, r *http.Request) {
+	id := mux.Vars(r)["id"]
+	Mu.Lock()
+	err := Store.DeleteCompletionEvent(id)
+	Mu.Unlock()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // Helper function for int to string
