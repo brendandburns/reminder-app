@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Completion Events - Family Reminder App</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="js/shared.js"></script>
+  <style>
+    body { 
+      background: #f8f9fa; 
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    main.container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 1.5rem;
+    }
+
+    .filters {
+      margin-bottom: 1.5rem;
+      padding: 1rem;
+      background: white;
+      border-radius: 0.5rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .events-list {
+      flex: 1;
+      background: white;
+      border-radius: 0.5rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      padding: 1rem;
+      overflow-y: auto;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 2rem;
+      color: #6c757d;
+    }
+
+    .completion-event {
+      border-left: 4px solid #28a745;
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <div id="menu-placeholder"></div>
+  <main class="container">
+    <div class="filters">
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label for="member-selector" class="form-label">Family Member</label>
+          <select class="form-select" id="member-selector">
+            <option value="">Choose your name...</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label for="time-range" class="form-label">Time Range</label>
+          <select class="form-select" id="time-range">
+            <option value="today">Today</option>
+            <option value="week">This Week</option>
+            <option value="month">This Month</option>
+            <option value="all" selected>All Time</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div id="loading-state" class="text-center py-4">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+
+    <div class="events-list d-none">
+      <div id="events-container">
+        <!-- Events will be inserted here -->
+      </div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script type="module" src="/events.ts"></script>
+</body>
+</html>
