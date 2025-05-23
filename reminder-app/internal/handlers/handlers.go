@@ -12,6 +12,7 @@ import (
 	"time"
 
 	fam "reminder-app/internal/family"
+	"reminder-app/internal/reminder"
 	rem "reminder-app/internal/reminder"
 	"reminder-app/internal/storage"
 
@@ -43,8 +44,7 @@ func CreateFamilyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	Mu.Lock()
-	familyIDCounter++
-	f.ID = "fam" + itoa(familyIDCounter)
+	f.ID = storage.GenerateFamilyID(Store)
 	err = Store.CreateFamily(&f)
 	Mu.Unlock()
 	if err != nil {
@@ -198,8 +198,7 @@ func CreateReminderHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	reminderIDCounter++
-	id := "rem" + itoa(reminderIDCounter)
+	id := storage.GenerateReminderID(Store)
 	reminder := rem.NewReminder(id, req.Title, req.Description, due, req.FamilyID, req.FamilyMember, req.Recurrence)
 	err = Store.CreateReminder(reminder)
 	Mu.Unlock()
@@ -254,19 +253,19 @@ func DeleteReminderHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("%s %s %s %d", r.Method, r.URL.Path, r.UserAgent(), http.StatusNoContent)
 }
 
-func UpdateReminderHandler(w http.ResponseWriter, r *http.Request) {
-	id := mux.Vars(r)["id"]
+func UpdateReminderHandler(w http.ResponseWriter, req *http.Request) {
+	id := mux.Vars(req)["id"]
 	Mu.Lock()
-	reminder, err := Store.GetReminder(id)
+	r, err := Store.GetReminder(id)
 	if err != nil {
 		Mu.Unlock()
-		http.NotFound(w, r)
-		log.Printf("%s %s %s %d - Not Found: reminder id '%s' does not exist (update)", r.Method, r.URL.Path, r.UserAgent(), http.StatusNotFound, id)
+		http.NotFound(w, req)
+		log.Printf("%s %s %s %d - Not Found: reminder id '%s' does not exist (update)", req.Method, req.URL.Path, req.UserAgent(), http.StatusNotFound, id)
 		return
 	}
 	// Read and decode partial update
 	var patch map[string]interface{}
-	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+	if err := json.NewDecoder(req.Body).Decode(&patch); err != nil {
 		Mu.Unlock()
 		http.Error(w, "invalid JSON", http.StatusBadRequest)
 		return
@@ -276,42 +275,54 @@ func UpdateReminderHandler(w http.ResponseWriter, r *http.Request) {
 		switch k {
 		case "title":
 			if s, ok := v.(string); ok {
-				reminder.Title = s
+				r.Title = s
 				updated = true
 			}
 		case "description":
 			if s, ok := v.(string); ok {
-				reminder.Description = s
+				r.Description = s
 				updated = true
 			}
 		case "due_date":
 			if s, ok := v.(string); ok {
 				if t, err := time.Parse(time.RFC3339, s); err == nil {
-					reminder.DueDate = t
+					r.DueDate = t
 					updated = true
 				}
 			}
 		case "completed":
 			if b, ok := v.(bool); ok {
-				if reminder.IsRecurring() {
+				now := time.Now()
+				if r.IsRecurring() {
 					// For recurring reminders, never set Completed=true, just set CompletedAt
 					if b {
-						now := time.Now()
-						reminder.CompletedAt = &now
+						r.CompletedAt = &now
 					} else {
-						reminder.CompletedAt = nil
+						r.CompletedAt = nil
 					}
-					reminder.Completed = false
+					r.Completed = false
 					updated = true
 				} else {
-					if b && !reminder.Completed {
-						reminder.MarkCompleted()
+					if b && !r.Completed {
+						r.MarkCompleted()
 						updated = true
-					} else if !b && reminder.Completed {
-						reminder.Completed = false
-						reminder.CompletedAt = nil
+					} else if !b && r.Completed {
+						r.Completed = false
+						r.CompletedAt = nil
 						updated = true
 					}
+				}
+				// Create a completion event
+				completionEvent := &reminder.CompletionEvent{
+					ID:          fmt.Sprintf("cev%d", reminderIDCounter+1),
+					ReminderID:  r.ID,
+					CompletedBy: r.FamilyMember, // Assuming the assigned member completed it
+					CompletedAt: now,
+				}
+
+				if err := Store.CreateCompletionEvent(completionEvent); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
 				}
 			}
 		case "recurrence":
@@ -319,19 +330,20 @@ func UpdateReminderHandler(w http.ResponseWriter, r *http.Request) {
 				var rp rem.RecurrencePattern
 				b, _ := json.Marshal(rec)
 				if err := json.Unmarshal(b, &rp); err == nil {
-					reminder.Recurrence = rp
+					r.Recurrence = rp
 					updated = true
 				}
 			}
 		case "family_member":
 			if s, ok := v.(string); ok {
-				reminder.FamilyMember = s
+				r.FamilyMember = s
 				updated = true
 			}
 		}
 	}
+
 	if updated {
-		err = Store.CreateReminder(reminder) // Overwrite existing
+		err = Store.CreateReminder(r) // Overwrite existing
 	}
 	Mu.Unlock()
 	if err != nil {
@@ -339,8 +351,8 @@ func UpdateReminderHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(reminder)
-	log.Printf("%s %s %s %d - PATCH reminder %s", r.Method, r.URL.Path, r.UserAgent(), http.StatusOK, id)
+	json.NewEncoder(w).Encode(r)
+	log.Printf("%s %s %s %d - PATCH reminder %s", req.Method, req.URL.Path, req.UserAgent(), http.StatusOK, id)
 }
 
 // --- CompletionEvent Handlers ---
@@ -358,8 +370,7 @@ func CreateCompletionEventHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if e.ID == "" {
 		Mu.Lock()
-		e.ID = "cev" + itoa(reminderIDCounter+1) // Use reminderIDCounter for unique IDs
-		reminderIDCounter++
+		e.ID = storage.GenerateCompletionEventID(Store)
 		Mu.Unlock()
 	}
 	if e.ReminderID == "" || e.CompletedBy == "" {

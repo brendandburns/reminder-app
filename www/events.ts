@@ -94,20 +94,18 @@ $(document).ready(function() {
 
   function isThisWeek(date: Date): boolean {
     const now = new Date();
-    const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() - now.getDay());
-    weekStart.setHours(0, 0, 0, 0);
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekStart.getDate() + 6);
-    weekEnd.setHours(23, 59, 59, 999);
+    const sevenDaysAgo = new Date(now);
+    sevenDaysAgo.setDate(now.getDate() - 7);
     
-    return date >= weekStart && date <= weekEnd;
+    return date >= sevenDaysAgo && date <= now;
   }
 
   function isThisMonth(date: Date): boolean {
     const now = new Date();
-    return date.getMonth() === now.getMonth() &&
-           date.getFullYear() === now.getFullYear();
+    const thirtyDaysAgo = new Date(now);
+    thirtyDaysAgo.setDate(now.getDate() - 30);
+    
+    return date >= thirtyDaysAgo && date <= now;
   }
 
   function filterEvents(events: CompletionEvent[], reminderMap: Map<string, Reminder>): CompletionEvent[] {
@@ -136,20 +134,37 @@ $(document).ready(function() {
       // First load all reminders to get their details
       const reminders: Reminder[] = await $.get('/reminders');
       const reminderMap = new Map<string, Reminder>();
-      reminders.forEach(r => reminderMap.set(r.id, r));
+      
+      // Filter reminders for the selected family and member
+      const memberReminders = reminders.filter(r => 
+        r.family_id === familyId && r.family_member === memberName
+      );
+      
+      memberReminders.forEach(r => reminderMap.set(r.id, r));
 
-      // Then load completion events
-      const events: CompletionEvent[] = await $.get('/completion-events');
-      const memberEvents = events.filter(e => {
-        const reminder = reminderMap.get(e.reminder_id);
-        return reminder && reminder.family_id === familyId && 
-               (reminder.family_member === memberName || e.completed_by === memberName);
-      });
+      // Load completion events for each reminder
+      const allEvents: CompletionEvent[] = [];
+      
+      for (const reminder of memberReminders) {
+        try {
+          const events: CompletionEvent[] = await $.get(`/reminders/${reminder.id}/completion-events`);
+          allEvents.push(...events);
+        } catch (error) {
+          // If a reminder has no completion events, the endpoint might return 404
+          // This is normal, so we continue to the next reminder
+          console.debug(`No completion events found for reminder ${reminder.id}`);
+        }
+      }
 
-      const filteredEvents = filterEvents(memberEvents, reminderMap);
+      const filteredEvents = filterEvents(allEvents, reminderMap);
       displayEvents(filteredEvents, reminderMap);
     } catch (error) {
       console.error('Failed to load events:', error);
+      eventsContainer.html(`
+        <div class="alert alert-danger">
+          Failed to load completion events. Please try again.
+        </div>
+      `);
     } finally {
       loadingState.addClass('d-none');
       eventsList.removeClass('d-none');

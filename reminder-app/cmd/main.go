@@ -3,18 +3,11 @@ package main
 import (
 	"log"
 	"net/http"
-	"sync"
 
 	"reminder-app/internal/handlers"
 	"reminder-app/internal/storage"
 
 	"github.com/gorilla/mux"
-)
-
-var (
-	mu                sync.Mutex
-	familyIDCounter   int
-	reminderIDCounter int
 )
 
 func main() {
@@ -24,7 +17,7 @@ func main() {
 	// For file-based:
 	// handlers.Store = storage.NewFileStorage("families.json", "reminders.json")
 
-	//handlers.Store = storage.NewMemoryStorage() // Default to memory, change to file as needed
+	// handlers.Store = storage.NewMemoryStorage() // Default to memory, change to file as needed
 	handlers.Store = storage.NewFileStorage("families.json", "reminders.json", "completion_events.json")
 
 	r := mux.NewRouter()
@@ -44,7 +37,7 @@ func main() {
 
 	// CompletionEvent routes
 	r.HandleFunc("/completion-events", handlers.CreateCompletionEventHandler).Methods("POST")
-	r.HandleFunc("/completion-events", handlers.ListCompletionEventsHandler).Methods("GET")
+	r.HandleFunc("/reminders/{id}/completion-events", handlers.ListCompletionEventsHandler).Methods("GET")
 	r.HandleFunc("/completion-events/{id}", handlers.GetCompletionEventHandler).Methods("GET")
 	r.HandleFunc("/completion-events/{id}", handlers.DeleteCompletionEventHandler).Methods("DELETE")
 

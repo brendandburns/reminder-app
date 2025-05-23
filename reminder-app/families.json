@@ -3,9 +3,22 @@
     "id": "fam1",
     "name": "Burns Family",
     "members": [
-      "Jaine",
-      "Mal",
-      "Wash",
+      "Brendan",
+      "Mrs Paws",
+      "Child1",
+      "Child2",
+      "Robin"
+    ]
+  },
+  "fam2": {
+    "id": "fam2",
+    "name": "Jetsons",
+    "members": [
+      "Rosie",
+      "George",
+      "Jane",
+      "Astro",
+      "Judy",
       ""
     ]
   }

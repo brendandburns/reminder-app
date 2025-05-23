@@ -134,3 +134,83 @@ func TestFileStorage(t *testing.T) {
 	store := NewFileStorage(famFile, remFile, completeFile)
 	runStorageTests(t, store)
 }
+
+func TestFileStorageIDPersistence(t *testing.T) {
+	famFile := "test_families_id.json"
+	remFile := "test_reminders_id.json"
+	completeFile := "test_completion_events_id.json"
+	os.Remove(famFile)
+	os.Remove(remFile)
+	os.Remove(completeFile)
+	defer os.Remove(famFile)
+	defer os.Remove(remFile)
+	defer os.Remove(completeFile)
+
+	store := NewFileStorage(famFile, remFile, completeFile)
+
+	// Generate and create a few families, reminders, and completion events
+	fam1 := &family.Family{ID: GenerateFamilyID(store), Name: "Fam1", Members: []string{"A"}}
+	fam2 := &family.Family{ID: GenerateFamilyID(store), Name: "Fam2", Members: []string{"B"}}
+	if err := store.CreateFamily(fam1); err != nil {
+		t.Fatalf("CreateFamily fam1 failed: %v", err)
+	}
+	if err := store.CreateFamily(fam2); err != nil {
+		t.Fatalf("CreateFamily fam2 failed: %v", err)
+	}
+
+	due := time.Now().Add(24 * time.Hour)
+	r1 := &reminder.Reminder{ID: GenerateReminderID(store), Title: "R1", FamilyID: fam1.ID, FamilyMember: "A", DueDate: due}
+	r2 := &reminder.Reminder{ID: GenerateReminderID(store), Title: "R2", FamilyID: fam2.ID, FamilyMember: "B", DueDate: due}
+	if err := store.CreateReminder(r1); err != nil {
+		t.Fatalf("CreateReminder r1 failed: %v", err)
+	}
+	if err := store.CreateReminder(r2); err != nil {
+		t.Fatalf("CreateReminder r2 failed: %v", err)
+	}
+
+	e1 := &reminder.CompletionEvent{ID: GenerateCompletionEventID(store), ReminderID: r1.ID, CompletedBy: "A", CompletedAt: time.Now()}
+	e2 := &reminder.CompletionEvent{ID: GenerateCompletionEventID(store), ReminderID: r2.ID, CompletedBy: "B", CompletedAt: time.Now()}
+	if err := store.CreateCompletionEvent(e1); err != nil {
+		t.Fatalf("CreateCompletionEvent e1 failed: %v", err)
+	}
+	if err := store.CreateCompletionEvent(e2); err != nil {
+		t.Fatalf("CreateCompletionEvent e2 failed: %v", err)
+	}
+
+	// Check counters after creation
+	if got, want := store.GetFamilyIDCounter(), 2; got != want {
+		t.Errorf("FamilyIDCounter after create: got %d, want %d", got, want)
+	}
+	if got, want := store.GetReminderIDCounter(), 2; got != want {
+		t.Errorf("ReminderIDCounter after create: got %d, want %d", got, want)
+	}
+	if got, want := store.GetCompletionEventIDCounter(), 2; got != want {
+		t.Errorf("CompletionEventIDCounter after create: got %d, want %d", got, want)
+	}
+
+	// Reload storage and check counters are restored
+	store2 := NewFileStorage(famFile, remFile, completeFile)
+	if got, want := store2.GetFamilyIDCounter(), 2; got != want {
+		t.Errorf("FamilyIDCounter after reload: got %d, want %d", got, want)
+	}
+	if got, want := store2.GetReminderIDCounter(), 2; got != want {
+		t.Errorf("ReminderIDCounter after reload: got %d, want %d", got, want)
+	}
+	if got, want := store2.GetCompletionEventIDCounter(), 2; got != want {
+		t.Errorf("CompletionEventIDCounter after reload: got %d, want %d", got, want)
+	}
+
+	// Generate new IDs and check they increment
+	newFamID := GenerateFamilyID(store2)
+	if newFamID != "fam3" {
+		t.Errorf("Next family ID after reload: got %s, want fam3", newFamID)
+	}
+	newRemID := GenerateReminderID(store2)
+	if newRemID != "rem3" {
+		t.Errorf("Next reminder ID after reload: got %s, want rem3", newRemID)
+	}
+	newCevID := GenerateCompletionEventID(store2)
+	if newCevID != "cev3" {
+		t.Errorf("Next completion event ID after reload: got %s, want cev3", newCevID)
+	}
+}

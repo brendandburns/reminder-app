@@ -9,10 +9,13 @@ import (
 )
 
 type MemoryStorage struct {
-	families         map[string]*family.Family
-	reminders        map[string]*reminder.Reminder
-	completionEvents map[string]*reminder.CompletionEvent // new
-	mu               sync.Mutex
+	families                 map[string]*family.Family
+	reminders                map[string]*reminder.Reminder
+	completionEvents         map[string]*reminder.CompletionEvent // new
+	familyIDCounter          int
+	reminderIDCounter        int
+	completionEventIDCounter int
+	mu                       sync.Mutex
 }
 
 func NewMemoryStorage() *MemoryStorage {
@@ -127,5 +130,44 @@ func (m *MemoryStorage) DeleteCompletionEvent(id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.completionEvents, id)
+	return nil
+}
+func (fs *MemoryStorage) GetCompletionEventIDCounter() int {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+	return fs.completionEventIDCounter
+}
+
+func (fs *MemoryStorage) GetFamilyIDCounter() int {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+	return fs.familyIDCounter
+}
+
+func (fs *MemoryStorage) GetReminderIDCounter() int {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+	return fs.reminderIDCounter
+}
+
+// Counter setter methods (useful for restoring state or testing)
+func (m *MemoryStorage) SetFamilyIDCounter(counter int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.familyIDCounter = counter
+	return nil
+}
+
+func (m *MemoryStorage) SetReminderIDCounter(counter int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.reminderIDCounter = counter
+	return nil
+}
+
+func (m *MemoryStorage) SetCompletionEventIDCounter(counter int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.completionEventIDCounter = counter
 	return nil
 }

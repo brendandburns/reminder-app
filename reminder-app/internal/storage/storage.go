@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"fmt"
 	"reminder-app/internal/family"
 	"reminder-app/internal/reminder"
 )
@@ -25,4 +26,36 @@ type Storage interface {
 	GetCompletionEvent(id string) (*reminder.CompletionEvent, error)
 	ListCompletionEvents(reminderID string) ([]*reminder.CompletionEvent, error)
 	DeleteCompletionEvent(id string) error
+
+	// ID counter operations
+	GetFamilyIDCounter() int
+	SetFamilyIDCounter(counter int) error
+	GetReminderIDCounter() int
+	SetReminderIDCounter(counter int) error
+	GetCompletionEventIDCounter() int
+	SetCompletionEventIDCounter(counter int) error
+}
+
+func GenerateFamilyID(s Storage) string {
+	// Generate a new family ID
+	counter := s.GetFamilyIDCounter()
+	counter++
+	s.SetFamilyIDCounter(counter)
+	return fmt.Sprintf("fam%d", counter)
+}
+
+func GenerateReminderID(s Storage) string {
+	// Generate a new reminder ID
+	counter := s.GetReminderIDCounter()
+	counter++
+	s.SetReminderIDCounter(counter)
+	return fmt.Sprintf("rem%d", counter)
+}
+
+func GenerateCompletionEventID(s Storage) string {
+	// Generate a new completion event ID
+	counter := s.GetCompletionEventIDCounter()
+	counter++
+	s.SetCompletionEventIDCounter(counter)
+	return fmt.Sprintf("cev%d", counter)
 }
