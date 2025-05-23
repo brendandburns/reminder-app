@@ -4,6 +4,14 @@ export default defineConfig({
   root: '.',
   build: {
     outDir: 'dist',
+    rollupOptions: {
+      input: {
+        main: 'index.html',
+        events: 'events.html',
+        member: 'member.html',
+        menu: 'components/menu.html',
+      },
+    },
   },
   server: {
     port: 5173,

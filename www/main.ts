@@ -12,7 +12,16 @@ interface JQueryXHR {
   statusText: string;
 }
 
+function loadMenubar() {
+   $("#menu-placeholder").load("components/menu.html", function() {
+    // Highlight current page in menu
+    const currentPage = window.location.pathname.split('/').pop();
+    $(`.nav-link[href="${currentPage}"]`).addClass('active');
+  });
+}
+
 $(document).ready(function () {
+  loadMenubar();
   interface Family {
     id: string;
     name: string;
