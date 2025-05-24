@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reminder-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: reminder-app
+  template:
+    metadata:
+      labels:
+        app: reminder-app
+    spec:
+      containers:
+        - name: reminder-app
+          image: burns.azurecr.io/reminder-app:v1
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+          - mountPath: /etc/localtime
+            name: tz-seattle
+      imagePullSecrets:
+      - name: pull-secret
+      volumes:
+      - hostPath:
+          path: /usr/share/zoneinfo/US/Pacific
+          type: ""
+        name: tz-seattle
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: reminder-app
+spec:
+  selector:
+    app: reminder-app
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+  type: ClusterIP
