@@ -13,7 +13,6 @@ import (
 
 	fam "reminder-app/internal/family"
 	"reminder-app/internal/reminder"
-	rem "reminder-app/internal/reminder"
 	"reminder-app/internal/storage"
 
 	"github.com/gorilla/mux"
@@ -21,10 +20,8 @@ import (
 
 var (
 	// Remove old maps, use storage instead
-	Store             storage.Storage
-	Mu                sync.Mutex
-	familyIDCounter   int
-	reminderIDCounter int
+	Store storage.Storage
+	Mu    sync.Mutex
 )
 
 // Family Handlers
@@ -101,12 +98,12 @@ func DeleteFamilyHandler(w http.ResponseWriter, r *http.Request) {
 // Reminder Handlers
 func CreateReminderHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Title        string                `json:"title"`
-		Description  string                `json:"description"`
-		DueDate      string                `json:"due_date"`
-		FamilyID     string                `json:"family_id"`
-		FamilyMember string                `json:"family_member"`
-		Recurrence   rem.RecurrencePattern `json:"recurrence"`
+		Title        string                     `json:"title"`
+		Description  string                     `json:"description"`
+		DueDate      string                     `json:"due_date"`
+		FamilyID     string                     `json:"family_id"`
+		FamilyMember string                     `json:"family_member"`
+		Recurrence   reminder.RecurrencePattern `json:"recurrence"`
 	}
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -199,8 +196,8 @@ func CreateReminderHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := storage.GenerateReminderID(Store)
-	reminder := rem.NewReminder(id, req.Title, req.Description, due, req.FamilyID, req.FamilyMember, req.Recurrence)
-	err = Store.CreateReminder(reminder)
+	re := reminder.NewReminder(id, req.Title, req.Description, due, req.FamilyID, req.FamilyMember, req.Recurrence)
+	err = Store.CreateReminder(re)
 	Mu.Unlock()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -208,7 +205,7 @@ func CreateReminderHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(reminder)
+	json.NewEncoder(w).Encode(re)
 	log.Printf("%s %s %s %d", r.Method, r.URL.Path, r.UserAgent(), http.StatusCreated)
 }
 
@@ -314,7 +311,7 @@ func UpdateReminderHandler(w http.ResponseWriter, req *http.Request) {
 				}
 				// Create a completion event
 				completionEvent := &reminder.CompletionEvent{
-					ID:          fmt.Sprintf("cev%d", reminderIDCounter+1),
+					ID:          fmt.Sprintf("cev%d", Store.GetCompletionEventIDCounter()+1),
 					ReminderID:  r.ID,
 					CompletedBy: r.FamilyMember, // Assuming the assigned member completed it
 					CompletedAt: now,
@@ -327,7 +324,7 @@ func UpdateReminderHandler(w http.ResponseWriter, req *http.Request) {
 			}
 		case "recurrence":
 			if rec, ok := v.(map[string]interface{}); ok {
-				var rp rem.RecurrencePattern
+				var rp reminder.RecurrencePattern
 				b, _ := json.Marshal(rec)
 				if err := json.Unmarshal(b, &rp); err == nil {
 					r.Recurrence = rp
@@ -357,7 +354,7 @@ func UpdateReminderHandler(w http.ResponseWriter, req *http.Request) {
 
 // --- CompletionEvent Handlers ---
 func CreateCompletionEventHandler(w http.ResponseWriter, r *http.Request) {
-	var e rem.CompletionEvent
+	var e reminder.CompletionEvent
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "failed to read request body", http.StatusBadRequest)
@@ -432,11 +429,6 @@ func DeleteCompletionEventHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// Helper function for int to string
-func itoa(i int) string {
-	return fmt.Sprintf("%d", i)
 }
 
 // Helper function to validate weekday strings

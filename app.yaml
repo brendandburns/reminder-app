@@ -14,19 +14,30 @@ spec:
     spec:
       containers:
         - name: reminder-app
-          image: burns.azurecr.io/reminder-app:v1
+          image: burns.azurecr.io/reminder-app:v2
+          command:
+            - "./main"
+            - "--static=./static"
+            - "--tls-cert=/etc/certs/tls.crt"
+            - "--tls-key=/etc/certs/tls.key"
           ports:
             - containerPort: 8080
           volumeMounts:
-          - mountPath: /etc/localtime
-            name: tz-seattle
+            - mountPath: /etc/localtime
+              name: tz-seattle
+            - mountPath: /etc/certs
+              name: certs
+              readOnly: true
       imagePullSecrets:
-      - name: pull-secret
+        - name: pull-secret
       volumes:
-      - hostPath:
-          path: /usr/share/zoneinfo/US/Pacific
-          type: ""
-        name: tz-seattle
+        - hostPath:
+            path: /usr/share/zoneinfo/US/Pacific
+            type: ""
+          name: tz-seattle
+        - name: certs
+          secret:
+            secretName: reminder-certs
 ---
 apiVersion: v1
 kind: Service
@@ -39,4 +50,7 @@ spec:
     - protocol: TCP
       port: 80
       targetPort: 8080
+    - protocol: TCP
+      port: 443
+      targetPort: 443
   type: ClusterIP

@@ -15,6 +15,8 @@ import (
 
 func main() {
 	staticDir := flag.String("static", "./static", "directory to serve static files from")
+	tlsCert := flag.String("tls-cert", "", "path to TLS certificate file (optional)")
+	tlsKey := flag.String("tls-key", "", "path to TLS key file (optional)")
 	flag.Parse()
 
 	handlers.Store = storage.NewFileStorage("families.json", "reminders.json", "completion_events.json")
@@ -53,8 +55,17 @@ func main() {
 		staticFs.ServeHTTP(w, req)
 	}))
 
-	log.Println("Starting reminder app on :8080, serving static files from", *staticDir)
-	if err := http.ListenAndServe(":8080", r); err != nil {
-		log.Fatalf("Could not start server: %s\n", err)
+	if *tlsCert != "" && *tlsKey != "" {
+		addr := ":443"
+		log.Println("Starting reminder app with HTTPS on", addr, "serving static files from", *staticDir)
+		if err := http.ListenAndServeTLS(addr, *tlsCert, *tlsKey, r); err != nil {
+			log.Fatalf("Could not start HTTPS server: %s\n", err)
+		}
+	} else {
+		addr := ":8080"
+		log.Println("Starting reminder app with HTTP on", addr, "serving static files from", *staticDir)
+		if err := http.ListenAndServe(addr, r); err != nil {
+			log.Fatalf("Could not start HTTP server: %s\n", err)
+		}
 	}
 }

@@ -1,4 +1,4 @@
-FROM alpine:latest
+FROM debian:bookworm-slim
 
 WORKDIR /app
 
@@ -9,5 +9,3 @@ COPY reminder-app/main .
 COPY www/dist ./static
 
 EXPOSE 8080
-
-ENTRYPOINT ["./main"]

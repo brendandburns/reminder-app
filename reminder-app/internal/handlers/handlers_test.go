@@ -37,8 +37,9 @@ func setupRouter() *mux.Router {
 
 func setupTestStorage() {
 	Store = storage.NewMemoryStorage()
-	familyIDCounter = 0
-	reminderIDCounter = 0
+	Store.SetFamilyIDCounter(0)
+	Store.SetReminderIDCounter(0)
+	Store.SetCompletionEventIDCounter(0)
 }
 
 func TestCreateFamilyHandler(t *testing.T) {
@@ -364,7 +365,7 @@ func TestCompletionEventHandlers(t *testing.T) {
 		if storedEvent.CompletedAt.IsZero() {
 			t.Error("CompletedAt should be set in stored event")
 		}
-	})	
+	})
 
 	t.Run("Get completion event", func(t *testing.T) {
 		// First create an event
