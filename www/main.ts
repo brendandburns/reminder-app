@@ -111,7 +111,7 @@ $(document).ready(function () {
                   <div class="d-flex align-items-center gap-2">
                     <span class="badge bg-primary rounded-pill">ID: ${r.id}</span>
                     <button class="btn btn-sm btn-outline-danger delete-reminder" data-reminder-id="${r.id}" title="Delete reminder">
-                      <i class="bi bi-trash"></i> Delete
+                      🗑️
                     </button>
                   </div>
                 </div>
@@ -290,21 +290,68 @@ $(document).ready(function () {
     const reminderId = $(this).data('reminder-id');
     const reminderTitle = $(this).closest('.list-group-item').find('h5').text();
     
-    if (confirm(`Are you sure you want to delete the reminder "${reminderTitle}"?`)) {
-      $.ajax({
-        url: `/reminders/${reminderId}`,
-        method: 'DELETE',
-        success: function() {
-          showDialog('Reminder deleted successfully!');
-          loadReminders(); // Refresh the reminder list
-        },
-        error: function(jqXHR: JQueryXHR, textStatus: string, errorThrown: string) {
-          console.error('Failed to delete reminder:', textStatus, errorThrown);
-          alert(`Failed to delete reminder: ${textStatus}`);
-        }
-      });
-    }
+    showDeleteConfirmation(reminderId, reminderTitle);
   });
+
+  // Show delete confirmation modal
+  function showDeleteConfirmation(reminderId: string, reminderTitle: string) {
+    let modal = $('#delete-confirmation-modal');
+    if (modal.length === 0) {
+      $('body').append(`
+        <div class="modal fade" id="delete-confirmation-modal" tabindex="-1" aria-labelledby="delete-confirmation-label" aria-hidden="true">
+          <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title" id="delete-confirmation-label">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <div class="modal-body">
+                <p>Are you sure you want to delete this reminder?</p>
+                <div class="alert alert-warning">
+                  <strong id="reminder-title-to-delete"></strong>
+                </div>
+                <p class="text-muted">This action cannot be undone.</p>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirm-delete-btn">Delete</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `);
+      modal = $('#delete-confirmation-modal');
+    }
+    
+    // Update the modal with the specific reminder details
+    modal.find('#reminder-title-to-delete').text(reminderTitle);
+    modal.find('#confirm-delete-btn').off('click').on('click', function() {
+      performDelete(reminderId);
+      // @ts-ignore
+      const bsModal = bootstrap.Modal.getInstance(modal[0]);
+      bsModal.hide();
+    });
+    
+    // @ts-ignore
+    const bsModal = new bootstrap.Modal(modal[0]);
+    bsModal.show();
+  }
+
+  // Perform the actual delete operation
+  function performDelete(reminderId: string) {
+    $.ajax({
+      url: `/reminders/${reminderId}`,
+      method: 'DELETE',
+      success: function() {
+        showDialog('Reminder deleted successfully!');
+        loadReminders(); // Refresh the reminder list
+      },
+      error: function(jqXHR: JQueryXHR, textStatus: string, errorThrown: string) {
+        console.error('Failed to delete reminder:', textStatus, errorThrown);
+        showDialog('Failed to delete reminder: ' + textStatus);
+      }
+    });
+  }
 
   // Modern Bootstrap dialog
   function showDialog(message: string) {
@@ -315,7 +362,7 @@ $(document).ready(function () {
           <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
               <div class="modal-header">
-                <h5 class="modal-title" id="copilot-modal-label">Success</h5>
+                <h5 class="modal-title" id="copilot-modal-label">Notification</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
               </div>
               <div class="modal-body"></div>
