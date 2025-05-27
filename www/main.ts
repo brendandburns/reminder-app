@@ -176,11 +176,23 @@ $(document).ready(function () {
   const weeklyOptions = document.getElementById('weekly-options') as HTMLDivElement;
   const monthlyOptions = document.getElementById('monthly-options') as HTMLDivElement;
   const endDateContainer = document.getElementById('end-date-container') as HTMLDivElement;
+  const dueDateContainer = document.getElementById('due-date-container') as HTMLDivElement;
+  const dueDateInput = document.getElementById('reminder-due-date') as HTMLInputElement;
 
   recurrenceType.addEventListener('change', () => {
     weeklyOptions.style.display = 'none';
     monthlyOptions.style.display = 'none';
     endDateContainer.style.display = 'none';
+
+    // Show/hide due date based on recurrence type
+    if (recurrenceType.value === 'once') {
+      dueDateContainer.style.display = 'block';
+      dueDateInput.required = true;
+    } else {
+      dueDateContainer.style.display = 'none';
+      dueDateInput.required = false;
+      dueDateInput.value = ''; // Clear the value when hidden
+    }
 
     switch (recurrenceType.value) {
       case 'weekly':
@@ -194,6 +206,9 @@ $(document).ready(function () {
     }
   });
 
+  // Initialize the form state
+  recurrenceType.dispatchEvent(new Event('change'));
+
   // Update form submission to include recurrence data
   const addReminderForm = document.getElementById('add-reminder-form') as HTMLFormElement;
   addReminderForm.addEventListener('submit', async (e) => {
@@ -203,7 +218,7 @@ $(document).ready(function () {
     const description = (document.getElementById('reminder-description') as HTMLInputElement).value;
     const familyId = (document.getElementById('reminder-family') as HTMLSelectElement).value;
     const familyMember = (document.getElementById('reminder-family-member') as HTMLSelectElement).value;
-    const dueDate = (document.getElementById('reminder-due-date') as HTMLInputElement).value;
+    const dueDateValue = (document.getElementById('reminder-due-date') as HTMLInputElement).value;
     const endDate = (document.getElementById('reminder-end-date') as HTMLInputElement).value;
 
     const recurrence: any = {
@@ -226,14 +241,18 @@ $(document).ready(function () {
       recurrence.end_date = new Date(endDate).toISOString();
     }
 
-    const reminderData = {
+    const reminderData: any = {
       title,
       description,
-      due_date: new Date(dueDate).toISOString(),
       family_id: familyId,
       family_member: familyMember,
       recurrence
     };
+
+    // Only include due_date for one-time reminders
+    if (recurrence.type === 'once' && dueDateValue) {
+      reminderData.due_date = new Date(dueDateValue).toISOString();
+    }
 
     try {
       const response = await fetch('/reminders', {
