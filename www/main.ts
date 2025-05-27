@@ -98,7 +98,7 @@ $(document).ready(function () {
             list.append(`
               <li class="list-group-item">
                 <div class="d-flex justify-content-between align-items-center">
-                  <div>
+                  <div class="flex-grow-1">
                     <h5 class="mb-1">${r.title}</h5>
                     <p class="mb-1">${r.description}</p>
                     <small class="text-muted">Due: ${formattedDate}</small>
@@ -108,7 +108,12 @@ $(document).ready(function () {
                       : '<small class="text-warning">⚠️ No one assigned</small>'
                     }
                   </div>
-                  <span class="badge bg-primary rounded-pill">ID: ${r.id}</span>
+                  <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-primary rounded-pill">ID: ${r.id}</span>
+                    <button class="btn btn-sm btn-outline-danger delete-reminder" data-reminder-id="${r.id}" title="Delete reminder">
+                      <i class="bi bi-trash"></i> Delete
+                    </button>
+                  </div>
                 </div>
               </li>
             `);
@@ -195,6 +200,9 @@ $(document).ready(function () {
     }
 
     switch (recurrenceType.value) {
+      case 'daily':
+        endDateContainer.style.display = 'block';
+        break;
       case 'weekly':
         weeklyOptions.style.display = 'block';
         endDateContainer.style.display = 'block';
@@ -237,7 +245,7 @@ $(document).ready(function () {
       recurrence.date = parseInt(monthlyDate.value);
     }
 
-    if (endDate && (recurrence.type === 'weekly' || recurrence.type === 'monthly')) {
+    if (endDate && (recurrence.type === 'daily' || recurrence.type === 'weekly' || recurrence.type === 'monthly')) {
       recurrence.end_date = new Date(endDate).toISOString();
     }
 
@@ -273,6 +281,28 @@ $(document).ready(function () {
     } catch (error) {
       console.error('Error creating reminder:', error);
       alert('Failed to create reminder');
+    }
+  });
+
+  // Delete reminder functionality
+  $(document).on('click', '.delete-reminder', function(e) {
+    e.preventDefault();
+    const reminderId = $(this).data('reminder-id');
+    const reminderTitle = $(this).closest('.list-group-item').find('h5').text();
+    
+    if (confirm(`Are you sure you want to delete the reminder "${reminderTitle}"?`)) {
+      $.ajax({
+        url: `/reminders/${reminderId}`,
+        method: 'DELETE',
+        success: function() {
+          showDialog('Reminder deleted successfully!');
+          loadReminders(); // Refresh the reminder list
+        },
+        error: function(jqXHR: JQueryXHR, textStatus: string, errorThrown: string) {
+          console.error('Failed to delete reminder:', textStatus, errorThrown);
+          alert(`Failed to delete reminder: ${textStatus}`);
+        }
+      });
     }
   });
 
