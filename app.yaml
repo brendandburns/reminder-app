@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: reminder-app
-          image: burns.azurecr.io/reminder-app:v2
+          image: burns.azurecr.io/reminder-app:main-ebb292e
           command:
             - "./main"
             - "--static=./static"
