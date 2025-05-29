@@ -17,9 +17,36 @@ func main() {
 	staticDir := flag.String("static", "./static", "directory to serve static files from")
 	tlsCert := flag.String("tls-cert", "", "path to TLS certificate file (optional)")
 	tlsKey := flag.String("tls-key", "", "path to TLS key file (optional)")
+
+	// Storage flags
+	storageType := flag.String("storage", "file", "storage backend to use: memory, file, or mongo")
+	mongoConnString := flag.String("mongo-conn", "mongodb://localhost:27017", "MongoDB connection string (used when storage=mongo)")
+	mongoDatabase := flag.String("mongo-db", "reminder_app", "MongoDB database name (used when storage=mongo)")
+
 	flag.Parse()
 
-	handlers.Store = storage.NewFileStorage("families.json", "reminders.json", "completion_events.json")
+	// Initialize storage based on type
+	var store storage.Storage
+	var err error
+
+	switch *storageType {
+	case "memory":
+		log.Println("Using memory storage")
+		store = storage.NewMemoryStorage()
+	case "file":
+		log.Println("Using file storage")
+		store = storage.NewFileStorage("families.json", "reminders.json", "completion_events.json")
+	case "mongo":
+		log.Printf("Using MongoDB storage (connection: %s, database: %s)", *mongoConnString, *mongoDatabase)
+		store, err = storage.NewMongoStorage(*mongoConnString, *mongoDatabase)
+		if err != nil {
+			log.Fatalf("Failed to initialize MongoDB storage: %v", err)
+		}
+	default:
+		log.Fatalf("Invalid storage type: %s. Valid options are: memory, file, mongo", *storageType)
+	}
+
+	handlers.Store = store
 
 	r := mux.NewRouter()
 
