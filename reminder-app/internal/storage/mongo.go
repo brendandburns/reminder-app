@@ -228,9 +228,13 @@ func (ms *MongoStorage) DeleteFamily(id string) error {
 func (ms *MongoStorage) CreateReminder(r *reminder.Reminder) error {
 	ctx := context.Background()
 
-	_, err := ms.reminderCollection.InsertOne(ctx, r)
+	// Use upsert to replace existing reminder with same ID or create new one
+	filter := bson.M{"id": r.ID}
+	opts := options.Replace().SetUpsert(true)
+
+	_, err := ms.reminderCollection.ReplaceOne(ctx, filter, r, opts)
 	if err != nil {
-		return fmt.Errorf("failed to create reminder: %w", err)
+		return fmt.Errorf("failed to create/update reminder: %w", err)
 	}
 
 	return nil
@@ -300,9 +304,13 @@ func (ms *MongoStorage) DeleteReminder(id string) error {
 func (ms *MongoStorage) CreateCompletionEvent(e *reminder.CompletionEvent) error {
 	ctx := context.Background()
 
-	_, err := ms.completionEventCollection.InsertOne(ctx, e)
+	// Use upsert to replace existing completion event with same ID or create new one
+	filter := bson.M{"id": e.ID}
+	opts := options.Replace().SetUpsert(true)
+
+	_, err := ms.completionEventCollection.ReplaceOne(ctx, filter, e, opts)
 	if err != nil {
-		return fmt.Errorf("failed to create completion event: %w", err)
+		return fmt.Errorf("failed to create/update completion event: %w", err)
 	}
 
 	return nil

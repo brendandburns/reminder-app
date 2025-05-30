@@ -16,7 +16,7 @@ type Reminder struct {
 	ID           string            `json:"id"`
 	Title        string            `json:"title"`
 	Description  string            `json:"description"`
-	DueDate      time.Time         `json:"due_date"`
+	DueDate      *time.Time        `json:"due_date,omitempty"`
 	Recurrence   RecurrencePattern `json:"recurrence"`
 	Completed    bool              `json:"completed"`
 	CompletedAt  *time.Time        `json:"completed_at,omitempty"`
@@ -25,6 +25,21 @@ type Reminder struct {
 }
 
 func NewReminder(id, title, description string, dueDate time.Time, familyID, familyMember string, recurrence RecurrencePattern) *Reminder {
+	return &Reminder{
+		ID:           id,
+		Title:        title,
+		Description:  description,
+		DueDate:      &dueDate,
+		Recurrence:   recurrence,
+		Completed:    false,
+		CompletedAt:  nil,
+		FamilyID:     familyID,
+		FamilyMember: familyMember,
+	}
+}
+
+// NewReminderWithNullableDueDate creates a new reminder with nullable due date
+func NewReminderWithNullableDueDate(id, title, description string, dueDate *time.Time, familyID, familyMember string, recurrence RecurrencePattern) *Reminder {
 	return &Reminder{
 		ID:           id,
 		Title:        title,
@@ -45,9 +60,13 @@ func (r *Reminder) IsRecurring() bool {
 
 // NextOccurrence returns the next occurrence of the reminder after the given time
 func (r *Reminder) NextOccurrence(after time.Time) *time.Time {
+	if r.DueDate == nil {
+		return nil
+	}
+
 	if r.Recurrence.Type == "once" {
 		if r.DueDate.After(after) {
-			return &r.DueDate
+			return r.DueDate
 		}
 		return nil
 	}
@@ -61,6 +80,14 @@ func (r *Reminder) NextOccurrence(after time.Time) *time.Time {
 
 	next := after
 	switch r.Recurrence.Type {
+	case "daily":
+		// Add one day to the "after" time, keeping the same time of day as the original due date
+		next = time.Date(
+			after.Year(), after.Month(), after.Day()+1,
+			r.DueDate.Hour(), r.DueDate.Minute(), r.DueDate.Second(),
+			0, after.Location(),
+		)
+		return &next
 	case "weekly":
 		// Find the next matching day of the week
 		for i := 0; i < 7; i++ {
@@ -95,7 +122,7 @@ func (r *Reminder) NextOccurrence(after time.Time) *time.Time {
 func (r *Reminder) Update(title, description string, dueDate time.Time) {
 	r.Title = title
 	r.Description = description
-	r.DueDate = dueDate
+	r.DueDate = &dueDate
 }
 
 func (r *Reminder) MarkCompleted() {

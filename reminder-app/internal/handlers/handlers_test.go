@@ -169,7 +169,7 @@ func TestGetReminderHandler(t *testing.T) {
 		ID:           "rem2",
 		Title:        "T2",
 		Description:  "D2",
-		DueDate:      due,
+		DueDate:      &due,
 		FamilyID:     "fam1",
 		FamilyMember: "Alice",
 	}
@@ -201,7 +201,7 @@ func TestUpdateReminderHandler(t *testing.T) {
 		ID:           "rem1",
 		Title:        "Old Title",
 		Description:  "Old Desc",
-		DueDate:      due,
+		DueDate:      &due,
 		FamilyID:     "fam1",
 		FamilyMember: "Alice",
 		Recurrence: reminder.RecurrencePattern{
@@ -266,7 +266,7 @@ func TestUpdateReminderHandler(t *testing.T) {
 			ID:           "rem2",
 			Title:        "Recurring Task",
 			Description:  "Daily task",
-			DueDate:      due,
+			DueDate:      &due,
 			FamilyID:     "fam1",
 			FamilyMember: "Alice",
 			Recurrence: reminder.RecurrencePattern{
@@ -317,7 +317,7 @@ func TestCompletionEventHandlers(t *testing.T) {
 	r := &reminder.Reminder{
 		ID:           "rem1",
 		Title:        "Test Reminder",
-		DueDate:      due,
+		DueDate:      &due,
 		FamilyID:     "fam1",
 		FamilyMember: "Alice",
 	}
@@ -401,7 +401,7 @@ func TestCompletionEventHandlers(t *testing.T) {
 			ID:           "rem3",
 			Title:        "Test Reminder",
 			Description:  "Test Description",
-			DueDate:      due,
+			DueDate:      &due,
 			FamilyID:     "fam1",
 			FamilyMember: "Alice",
 		}

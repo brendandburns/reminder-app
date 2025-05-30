@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	fam "reminder-app/internal/family"
@@ -21,31 +20,36 @@ import (
 var (
 	// Remove old maps, use storage instead
 	Store storage.Storage
-	Mu    sync.Mutex
 )
+
+// errorHandler provides consistent error handling and logging
+func errorHandler(w http.ResponseWriter, r *http.Request, message string, statusCode int, err error) {
+	if err != nil {
+		log.Printf("%s %s %s %d - %s: %v", r.Method, r.URL.Path, r.UserAgent(), statusCode, message, err)
+	} else {
+		log.Printf("%s %s %s %d - %s", r.Method, r.URL.Path, r.UserAgent(), statusCode, message)
+	}
+	http.Error(w, message, statusCode)
+}
 
 // Family Handlers
 func CreateFamilyHandler(w http.ResponseWriter, r *http.Request) {
 	var f fam.Family
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "failed to read request body", http.StatusBadRequest)
-		log.Printf("%s %s %s %d - Bad Request: failed to read body: %v", r.Method, r.URL.Path, r.UserAgent(), http.StatusBadRequest, err)
+		errorHandler(w, r, "failed to read request body", http.StatusBadRequest, err)
 		return
 	}
 	r.Body = io.NopCloser(bytes.NewBuffer(body)) // Reset body for further reading
 
 	if err := json.NewDecoder(r.Body).Decode(&f); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		log.Printf("%s %s %s %d - Bad Request: %v, Body: %s", r.Method, r.URL.Path, r.UserAgent(), http.StatusBadRequest, err, string(body))
+		errorHandler(w, r, fmt.Sprintf("invalid JSON: %v, Body: %s", err, string(body)), http.StatusBadRequest, err)
 		return
 	}
-	Mu.Lock()
 	f.ID = storage.GenerateFamilyID(Store)
 	err = Store.CreateFamily(&f)
-	Mu.Unlock()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		errorHandler(w, r, "failed to create family", http.StatusInternalServerError, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -56,12 +60,9 @@ func CreateFamilyHandler(w http.ResponseWriter, r *http.Request) {
 
 func GetFamilyHandler(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
-	Mu.Lock()
 	f, err := Store.GetFamily(id)
-	Mu.Unlock()
 	if err != nil {
-		http.NotFound(w, r)
-		log.Printf("%s %s %s %d", r.Method, r.URL.Path, r.UserAgent(), http.StatusNotFound)
+		errorHandler(w, r, fmt.Sprintf("family not found: %s", id), http.StatusNotFound, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -70,11 +71,9 @@ func GetFamilyHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func ListFamiliesHandler(w http.ResponseWriter, r *http.Request) {
-	Mu.Lock()
 	list, err := Store.ListFamilies()
-	Mu.Unlock()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		errorHandler(w, r, "failed to list families", http.StatusInternalServerError, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -84,11 +83,9 @@ func ListFamiliesHandler(w http.ResponseWriter, r *http.Request) {
 
 func DeleteFamilyHandler(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
-	Mu.Lock()
 	err := Store.DeleteFamily(id)
-	Mu.Unlock()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		errorHandler(w, r, "failed to delete family", http.StatusInternalServerError, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -107,36 +104,34 @@ func CreateReminderHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "failed to read request body", http.StatusBadRequest)
-		log.Printf("%s %s %s %d - Bad Request: failed to read body: %v", r.Method, r.URL.Path, r.UserAgent(), http.StatusBadRequest, err)
+		errorHandler(w, r, "failed to read request body", http.StatusBadRequest, err)
 		return
 	}
 	r.Body = io.NopCloser(bytes.NewBuffer(body)) // Reset body for further reading
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		log.Printf("%s %s %s %d - Bad Request: %v, Body: %s", r.Method, r.URL.Path, r.UserAgent(), http.StatusBadRequest, err, string(body))
+		errorHandler(w, r, fmt.Sprintf("invalid JSON: %v, Body: %s", err, string(body)), http.StatusBadRequest, err)
 		return
 	}
-	due, err := time.Parse(time.RFC3339, req.DueDate)
-	if err != nil {
-		http.Error(w, "invalid due_date format", http.StatusBadRequest)
-		log.Printf("%s %s %s %d - Bad Request: invalid due_date format: %v", r.Method, r.URL.Path, r.UserAgent(), http.StatusBadRequest, err)
-		return
+
+	var dueDate *time.Time
+	if req.DueDate != "" {
+		due, err := time.Parse(time.RFC3339, req.DueDate)
+		if err != nil {
+			errorHandler(w, r, "invalid due_date format", http.StatusBadRequest, err)
+			return
+		}
+		dueDate = &due
 	}
 
 	if req.FamilyID == "" || req.FamilyMember == "" {
-		http.Error(w, "family_id and family_member are required", http.StatusBadRequest)
-		log.Printf("%s %s %s %d - Bad Request: family_id and family_member are required", r.Method, r.URL.Path, r.UserAgent(), http.StatusBadRequest)
+		errorHandler(w, r, "family_id and family_member are required", http.StatusBadRequest, nil)
 		return
 	}
 
-	Mu.Lock()
 	family, err := Store.GetFamily(req.FamilyID)
 	if err != nil {
-		Mu.Unlock()
-		http.Error(w, "family not found", http.StatusBadRequest)
-		log.Printf("%s %s %s %d - Bad Request: family not found: %s", r.Method, r.URL.Path, r.UserAgent(), http.StatusBadRequest, req.FamilyID)
+		errorHandler(w, r, fmt.Sprintf("family not found: %s", req.FamilyID), http.StatusBadRequest, err)
 		return
 	}
 
@@ -148,9 +143,7 @@ func CreateReminderHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if !memberExists {
-		Mu.Unlock()
-		http.Error(w, "family member not found", http.StatusBadRequest)
-		log.Printf("%s %s %s %d - Bad Request: family member not found: %s", r.Method, r.URL.Path, r.UserAgent(), http.StatusBadRequest, req.FamilyMember)
+		errorHandler(w, r, fmt.Sprintf("family member not found: %s", req.FamilyMember), http.StatusBadRequest, nil)
 		return
 	}
 	if req.Recurrence.Type == "" {
@@ -161,46 +154,42 @@ func CreateReminderHandler(w http.ResponseWriter, r *http.Request) {
 	switch req.Recurrence.Type {
 	case "once":
 		// No additional validation needed
+	case "daily":
+		// No additional validation needed for daily recurrence
 	case "weekly":
 		if len(req.Recurrence.Days) == 0 {
-			Mu.Unlock()
-			http.Error(w, "weekly recurrence requires at least one day", http.StatusBadRequest)
+			errorHandler(w, r, "weekly recurrence requires at least one day", http.StatusBadRequest, nil)
 			return
 		}
 		for _, day := range req.Recurrence.Days {
 			if !isValidWeekday(day) {
-				Mu.Unlock()
-				http.Error(w, "invalid weekday in recurrence pattern", http.StatusBadRequest)
+				errorHandler(w, r, "invalid weekday in recurrence pattern", http.StatusBadRequest, nil)
 				return
 			}
 		}
 	case "monthly":
 		if req.Recurrence.Date < 1 || req.Recurrence.Date > 31 {
-			Mu.Unlock()
-			http.Error(w, "monthly recurrence requires a date between 1 and 31", http.StatusBadRequest)
+			errorHandler(w, r, "monthly recurrence requires a date between 1 and 31", http.StatusBadRequest, nil)
 			return
 		}
 	default:
-		Mu.Unlock()
-		http.Error(w, "invalid recurrence type", http.StatusBadRequest)
+		errorHandler(w, r, "invalid recurrence type", http.StatusBadRequest, nil)
 		return
 	}
 
 	if req.Recurrence.EndDate != "" {
 		_, err = time.Parse(time.RFC3339, req.Recurrence.EndDate)
 		if err != nil {
-			Mu.Unlock()
-			http.Error(w, "invalid end_date format", http.StatusBadRequest)
+			errorHandler(w, r, "invalid end_date format", http.StatusBadRequest, err)
 			return
 		}
 	}
 
 	id := storage.GenerateReminderID(Store)
-	re := reminder.NewReminder(id, req.Title, req.Description, due, req.FamilyID, req.FamilyMember, req.Recurrence)
+	re := reminder.NewReminderWithNullableDueDate(id, req.Title, req.Description, dueDate, req.FamilyID, req.FamilyMember, req.Recurrence)
 	err = Store.CreateReminder(re)
-	Mu.Unlock()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		errorHandler(w, r, "failed to create reminder", http.StatusInternalServerError, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -211,12 +200,9 @@ func CreateReminderHandler(w http.ResponseWriter, r *http.Request) {
 
 func GetReminderHandler(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
-	Mu.Lock()
 	reminder, err := Store.GetReminder(id)
-	Mu.Unlock()
 	if err != nil {
-		http.NotFound(w, r)
-		log.Printf("%s %s %s %d - Not Found: reminder id '%s' does not exist", r.Method, r.URL.Path, r.UserAgent(), http.StatusNotFound, id)
+		errorHandler(w, r, fmt.Sprintf("reminder not found: %s", id), http.StatusNotFound, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -225,11 +211,9 @@ func GetReminderHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func ListRemindersHandler(w http.ResponseWriter, r *http.Request) {
-	Mu.Lock()
 	list, err := Store.ListReminders()
-	Mu.Unlock()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		errorHandler(w, r, "failed to list reminders", http.StatusInternalServerError, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -239,11 +223,9 @@ func ListRemindersHandler(w http.ResponseWriter, r *http.Request) {
 
 func DeleteReminderHandler(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
-	Mu.Lock()
 	err := Store.DeleteReminder(id)
-	Mu.Unlock()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		errorHandler(w, r, "failed to delete reminder", http.StatusInternalServerError, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -252,19 +234,15 @@ func DeleteReminderHandler(w http.ResponseWriter, r *http.Request) {
 
 func UpdateReminderHandler(w http.ResponseWriter, req *http.Request) {
 	id := mux.Vars(req)["id"]
-	Mu.Lock()
 	r, err := Store.GetReminder(id)
 	if err != nil {
-		Mu.Unlock()
-		http.NotFound(w, req)
-		log.Printf("%s %s %s %d - Not Found: reminder id '%s' does not exist (update)", req.Method, req.URL.Path, req.UserAgent(), http.StatusNotFound, id)
+		errorHandler(w, req, fmt.Sprintf("reminder not found: %s", id), http.StatusNotFound, err)
 		return
 	}
 	// Read and decode partial update
 	var patch map[string]interface{}
 	if err := json.NewDecoder(req.Body).Decode(&patch); err != nil {
-		Mu.Unlock()
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		errorHandler(w, req, "invalid JSON", http.StatusBadRequest, err)
 		return
 	}
 	updated := false
@@ -282,8 +260,12 @@ func UpdateReminderHandler(w http.ResponseWriter, req *http.Request) {
 			}
 		case "due_date":
 			if s, ok := v.(string); ok {
-				if t, err := time.Parse(time.RFC3339, s); err == nil {
-					r.DueDate = t
+				if s == "" {
+					// Empty string means null due date
+					r.DueDate = nil
+					updated = true
+				} else if t, err := time.Parse(time.RFC3339, s); err == nil {
+					r.DueDate = &t
 					updated = true
 				}
 			}
@@ -318,7 +300,7 @@ func UpdateReminderHandler(w http.ResponseWriter, req *http.Request) {
 				}
 
 				if err := Store.CreateCompletionEvent(completionEvent); err != nil {
-					http.Error(w, err.Error(), http.StatusInternalServerError)
+					errorHandler(w, req, "failed to create completion event", http.StatusInternalServerError, err)
 					return
 				}
 			}
@@ -342,9 +324,8 @@ func UpdateReminderHandler(w http.ResponseWriter, req *http.Request) {
 	if updated {
 		err = Store.CreateReminder(r) // Overwrite existing
 	}
-	Mu.Unlock()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		errorHandler(w, req, "failed to update reminder", http.StatusInternalServerError, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -357,31 +338,27 @@ func CreateCompletionEventHandler(w http.ResponseWriter, r *http.Request) {
 	var e reminder.CompletionEvent
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "failed to read request body", http.StatusBadRequest)
+		errorHandler(w, r, "failed to read request body", http.StatusBadRequest, err)
 		return
 	}
 	r.Body = io.NopCloser(bytes.NewBuffer(body))
 	if err := json.NewDecoder(r.Body).Decode(&e); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		errorHandler(w, r, "invalid JSON", http.StatusBadRequest, err)
 		return
 	}
 	if e.ID == "" {
-		Mu.Lock()
 		e.ID = storage.GenerateCompletionEventID(Store)
-		Mu.Unlock()
 	}
 	if e.ReminderID == "" || e.CompletedBy == "" {
-		http.Error(w, "reminder_id and completed_by are required", http.StatusBadRequest)
+		errorHandler(w, r, "reminder_id and completed_by are required", http.StatusBadRequest, nil)
 		return
 	}
 	if e.CompletedAt.IsZero() {
 		e.CompletedAt = time.Now()
 	}
-	Mu.Lock()
 	err = Store.CreateCompletionEvent(&e)
-	Mu.Unlock()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		errorHandler(w, r, "failed to create completion event", http.StatusInternalServerError, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -391,11 +368,9 @@ func CreateCompletionEventHandler(w http.ResponseWriter, r *http.Request) {
 
 func GetCompletionEventHandler(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
-	Mu.Lock()
 	e, err := Store.GetCompletionEvent(id)
-	Mu.Unlock()
 	if err != nil {
-		http.NotFound(w, r)
+		errorHandler(w, r, fmt.Sprintf("completion event not found: %s", id), http.StatusNotFound, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -405,14 +380,12 @@ func GetCompletionEventHandler(w http.ResponseWriter, r *http.Request) {
 func ListCompletionEventsHandler(w http.ResponseWriter, r *http.Request) {
 	reminderID := mux.Vars(r)["id"]
 	if reminderID == "" {
-		http.Error(w, "reminder_id query param required", http.StatusBadRequest)
+		errorHandler(w, r, "reminder_id query param required", http.StatusBadRequest, nil)
 		return
 	}
-	Mu.Lock()
 	list, err := Store.ListCompletionEvents(reminderID)
-	Mu.Unlock()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		errorHandler(w, r, "failed to list completion events", http.StatusInternalServerError, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -421,11 +394,9 @@ func ListCompletionEventsHandler(w http.ResponseWriter, r *http.Request) {
 
 func DeleteCompletionEventHandler(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
-	Mu.Lock()
 	err := Store.DeleteCompletionEvent(id)
-	Mu.Unlock()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		errorHandler(w, r, "failed to delete completion event", http.StatusInternalServerError, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

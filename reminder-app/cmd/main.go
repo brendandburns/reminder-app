@@ -19,9 +19,10 @@ func main() {
 	tlsKey := flag.String("tls-key", "", "path to TLS key file (optional)")
 
 	// Storage flags
-	storageType := flag.String("storage", "file", "storage backend to use: memory, file, or mongo")
+	storageType := flag.String("storage", "file", "storage backend to use: memory, file, sqlite, or mongo")
 	mongoConnString := flag.String("mongo-conn", "mongodb://localhost:27017", "MongoDB connection string (used when storage=mongo)")
 	mongoDatabase := flag.String("mongo-db", "reminder_app", "MongoDB database name (used when storage=mongo)")
+	sqliteDbPath := flag.String("sqlite-db", "reminder_app.db", "SQLite database file path (used when storage=sqlite)")
 
 	flag.Parse()
 
@@ -36,6 +37,12 @@ func main() {
 	case "file":
 		log.Println("Using file storage")
 		store = storage.NewFileStorage("families.json", "reminders.json", "completion_events.json")
+	case "sqlite":
+		log.Printf("Using SQLite storage (database: %s)", *sqliteDbPath)
+		store, err = storage.NewSQLiteStorage(*sqliteDbPath)
+		if err != nil {
+			log.Fatalf("Failed to initialize SQLite storage: %v", err)
+		}
 	case "mongo":
 		log.Printf("Using MongoDB storage (connection: %s, database: %s)", *mongoConnString, *mongoDatabase)
 		store, err = storage.NewMongoStorage(*mongoConnString, *mongoDatabase)
@@ -43,7 +50,7 @@ func main() {
 			log.Fatalf("Failed to initialize MongoDB storage: %v", err)
 		}
 	default:
-		log.Fatalf("Invalid storage type: %s. Valid options are: memory, file, mongo", *storageType)
+		log.Fatalf("Invalid storage type: %s. Valid options are: memory, file, sqlite, mongo", *storageType)
 	}
 
 	handlers.Store = store

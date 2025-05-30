@@ -223,8 +223,8 @@ func TestMongoStorageRecalculateCounters(t *testing.T) {
 	}
 
 	due := time.Now().Add(24 * time.Hour)
-	rem1 := &reminder.Reminder{ID: "rem2", Title: "Test Reminder 1", FamilyID: fam1.ID, FamilyMember: "Alice", DueDate: due}
-	rem2 := &reminder.Reminder{ID: "rem8", Title: "Test Reminder 2", FamilyID: fam2.ID, FamilyMember: "Bob", DueDate: due}
+	rem1 := &reminder.Reminder{ID: "rem2", Title: "Test Reminder 1", FamilyID: fam1.ID, FamilyMember: "Alice", DueDate: &due}
+	rem2 := &reminder.Reminder{ID: "rem8", Title: "Test Reminder 2", FamilyID: fam2.ID, FamilyMember: "Bob", DueDate: &due}
 
 	err = mongoStorage.CreateReminder(rem1)
 	if err != nil {
@@ -287,8 +287,8 @@ func TestMongoStorageQueryOperations(t *testing.T) {
 	t.Run("ListCompletionEventsByReminderID", func(t *testing.T) {
 		// Create test data
 		due := time.Now().Add(24 * time.Hour)
-		rem1 := &reminder.Reminder{ID: "rem1", Title: "Test Reminder 1", FamilyID: "fam1", FamilyMember: "Alice", DueDate: due}
-		rem2 := &reminder.Reminder{ID: "rem2", Title: "Test Reminder 2", FamilyID: "fam1", FamilyMember: "Bob", DueDate: due}
+		rem1 := &reminder.Reminder{ID: "rem1", Title: "Test Reminder 1", FamilyID: "fam1", FamilyMember: "Alice", DueDate: &due}
+		rem2 := &reminder.Reminder{ID: "rem2", Title: "Test Reminder 2", FamilyID: "fam1", FamilyMember: "Bob", DueDate: &due}
 
 		err := mongoStorage.CreateReminder(rem1)
 		if err != nil {

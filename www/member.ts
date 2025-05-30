@@ -8,8 +8,9 @@ interface Reminder {
   id: string;
   title: string;
   description: string;
-  due_date: string;
+  due_date: string | null;
   completed: boolean;
+  completed_at?: string;
   family_id: string;
   family_member: string;
   recurrence?: {
@@ -89,24 +90,26 @@ $(document).ready(function() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
-    // Check direct due date
-    const dueDate = new Date(reminder.due_date);
-    if (dueDate.getFullYear() === today.getFullYear() &&
-        dueDate.getMonth() === today.getMonth() &&
-        dueDate.getDate() === today.getDate()) {
-      return true;
+    // Check direct due date only if it exists
+    if (reminder.due_date) {
+      const dueDate = new Date(reminder.due_date);
+      if (dueDate.getFullYear() === today.getFullYear() &&
+          dueDate.getMonth() === today.getMonth() &&
+          dueDate.getDate() === today.getDate()) {
+        return true;
+      }
     }
 
     // Check recurrence pattern
     if (reminder.recurrence) {
       switch (reminder.recurrence.type) {
+        case 'daily':
+          return true; // Daily reminders are always due today
         case 'weekly':
           const weekday = today.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
           return reminder.recurrence.days?.includes(weekday) || false;
-        
         case 'monthly':
           return reminder.recurrence.date === today.getDate();
-        
         default:
           return false;
       }
@@ -205,22 +208,71 @@ $(document).ready(function() {
     }
 
     reminders.forEach(r => {
-      const date = new Date(r.due_date);
-      const formattedDate = new Intl.DateTimeFormat('default', {
-        dateStyle: 'full',
-        timeStyle: 'short'
-      }).format(date);
+      // Handle due date display
+      let dueDateDisplay = '';
+      if (r.due_date) {
+        const date = new Date(r.due_date);
+        const formattedDate = new Intl.DateTimeFormat('default', {
+          dateStyle: 'full',
+          timeStyle: 'short'
+        }).format(date);
+        dueDateDisplay = `<small class="text-muted">📅 Due: ${formattedDate}</small>`;
+      }
 
-      let recurrenceText = '';
+      // Handle recurrence display
+      let recurrenceDisplay = '';
       if (r.recurrence && r.recurrence.type !== 'once') {
-        if (r.recurrence.type === 'weekly') {
-          recurrenceText = `Weekly on ${r.recurrence.days?.join(', ')}`;
-        } else if (r.recurrence.type === 'monthly') {
-          recurrenceText = `Monthly on day ${r.recurrence.date}`;
+        let recurrenceText = '';
+        switch (r.recurrence.type) {
+          case 'daily':
+            recurrenceText = '🔄 Daily';
+            break;
+          case 'weekly':
+            if (r.recurrence.days && r.recurrence.days.length > 0) {
+              const dayNames = r.recurrence.days.map(day => {
+                const dayMap: { [key: string]: string } = {
+                  'monday': 'Mon', 'tuesday': 'Tue', 'wednesday': 'Wed',
+                  'thursday': 'Thu', 'friday': 'Fri', 'saturday': 'Sat', 'sunday': 'Sun'
+                };
+                return dayMap[day] || day;
+              });
+              recurrenceText = `🔄 Weekly (${dayNames.join(', ')})`;
+            } else {
+              recurrenceText = '🔄 Weekly';
+            }
+            break;
+          case 'monthly':
+            if (r.recurrence.date) {
+              recurrenceText = `🔄 Monthly (${r.recurrence.date}${getOrdinalSuffix(r.recurrence.date)})`;
+            } else {
+              recurrenceText = '🔄 Monthly';
+            }
+            break;
+          default:
+            recurrenceText = '🔄 Recurring';
         }
+        
         if (r.recurrence.end_date) {
-          recurrenceText += ` until ${new Date(r.recurrence.end_date).toLocaleDateString()}`;
+          const endDate = new Date(r.recurrence.end_date);
+          const formattedEndDate = new Intl.DateTimeFormat('default', {
+            dateStyle: 'medium'
+          }).format(endDate);
+          recurrenceText += ` until ${formattedEndDate}`;
         }
+        
+        recurrenceDisplay = `<br><small class="text-info">${recurrenceText}</small>`;
+      }
+
+      // Combine due date and recurrence displays
+      let scheduleDisplay = '';
+      if (dueDateDisplay && recurrenceDisplay) {
+        scheduleDisplay = dueDateDisplay + recurrenceDisplay;
+      } else if (dueDateDisplay) {
+        scheduleDisplay = dueDateDisplay;
+      } else if (recurrenceDisplay) {
+        scheduleDisplay = recurrenceDisplay.substring(4); // Remove the <br> at start
+      } else {
+        scheduleDisplay = '<small class="text-warning">⚠️ No schedule set</small>';
       }
 
       const isDue = isDueToday(r);
@@ -234,8 +286,7 @@ $(document).ready(function() {
             </div>
             <p class="card-text">${r.description}</p>
             <p class="card-text">
-              <small class="text-muted">Due: ${formattedDate}</small>
-              ${recurrenceText ? `<br><small class="text-info">🔄 ${recurrenceText}</small>` : ''}
+              ${scheduleDisplay}
             </p>
             <button class="btn btn-sm btn-success mark-complete" data-id="${r.id}">
               Mark Complete
@@ -244,6 +295,13 @@ $(document).ready(function() {
         </div>
       `);
     });
+  }
+
+  // Helper function to get ordinal suffix (1st, 2nd, 3rd, etc.)
+  function getOrdinalSuffix(num: number): string {
+    const suffixes = ["th", "st", "nd", "rd"];
+    const value = num % 100;
+    return suffixes[(value - 20) % 10] || suffixes[value] || suffixes[0];
   }
 
   // Handle view type changes
