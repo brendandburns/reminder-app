@@ -207,6 +207,8 @@ $(document).ready(function() {
       return;
     }
 
+    const today = new Date();
+
     reminders.forEach(r => {
       // Handle due date display
       let dueDateDisplay = '';
@@ -277,20 +279,42 @@ $(document).ready(function() {
 
       const isDue = isDueToday(r);
       
+      // Check if reminder has been completed today
+      let isCompletedToday = false;
+      if (r.recurrence && r.recurrence.type !== 'once' && r.completed_at) {
+        const completedAt = new Date(r.completed_at);
+        isCompletedToday = isSameDay(today, completedAt);
+      } else if (!r.recurrence || r.recurrence.type === 'once') {
+        isCompletedToday = r.completed;
+      }
+
+      // Determine button display
+      let buttonHtml = '';
+      if (isCompletedToday) {
+        buttonHtml = '<span class="badge bg-success">✓ Completed Today</span>';
+      } else {
+        buttonHtml = `
+          <button class="btn btn-sm btn-success mark-complete" data-id="${r.id}">
+            Mark Complete
+          </button>
+        `;
+      }
+      
       list.append(`
-        <div class="card mb-3 ${isDue ? 'border-warning' : ''}">
+        <div class="card mb-3 ${isDue ? 'border-warning' : ''} ${isCompletedToday ? 'bg-light' : ''}">
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-start">
               <h5 class="card-title">${r.title}</h5>
-              ${isDue ? '<span class="badge bg-warning text-dark">Due Today</span>' : ''}
+              <div class="d-flex flex-column align-items-end gap-1">
+                ${isDue ? '<span class="badge bg-warning text-dark">Due Today</span>' : ''}
+                ${isCompletedToday ? '<span class="badge bg-success">✓ Done</span>' : ''}
+              </div>
             </div>
             <p class="card-text">${r.description}</p>
             <p class="card-text">
               ${scheduleDisplay}
             </p>
-            <button class="btn btn-sm btn-success mark-complete" data-id="${r.id}">
-              Mark Complete
-            </button>
+            ${buttonHtml}
           </div>
         </div>
       `);

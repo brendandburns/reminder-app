@@ -20,6 +20,8 @@ spec:
             - "--static=./static"
             - "--tls-cert=/etc/certs/tls.crt"
             - "--tls-key=/etc/certs/tls.key"
+            - "--storage=sqlite"
+            - "--sqlite-db=/data/data.db"
           ports:
             - containerPort: 8080
           volumeMounts:
@@ -28,6 +30,8 @@ spec:
             - mountPath: /etc/certs
               name: certs
               readOnly: true
+            - mountPath: /data
+              name: nfs-data
       imagePullSecrets:
         - name: pull-secret
       volumes:
@@ -38,6 +42,10 @@ spec:
         - name: certs
           secret:
             secretName: reminder-certs
+        - name: nfs-data
+          nfs:
+            server: storage.burns.house
+            path: /volume1/KubernetesPV
 ---
 apiVersion: v1
 kind: Service
@@ -50,7 +58,9 @@ spec:
     - protocol: TCP
       port: 80
       targetPort: 8080
+      name: http
     - protocol: TCP
       port: 443
       targetPort: 443
+      name: https
   type: ClusterIP
